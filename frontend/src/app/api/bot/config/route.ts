@@ -40,7 +40,6 @@ export async function GET(request: NextRequest) {
       config: configRes.data,
       state: stateRes.data,
       recentOrders: ordersRes.data || [],
-      _server_time: new Date().toISOString(),
     },
     {
       headers: {

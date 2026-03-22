@@ -379,17 +379,7 @@ export default function AutoTradePage() {
         fetch(`/api/strategies?user_id=${userId}`, { cache: "no-store" }).then((r) => r.json()),
       ]);
 
-      console.log("[LoadConfig] API response:", { hasConfig: !!configRes.config, hasState: !!configRes.state, ordersCount: configRes.recentOrders?.length, serverTime: configRes._server_time });
       if (configRes.config) {
-        console.log("[LoadConfig] DB values:", {
-          symbol: configRes.config.symbol,
-          lot_size: configRes.config.lot_size,
-          trade_start_hour: configRes.config.trade_start_hour,
-          trade_end_hour: configRes.config.trade_end_hour,
-          analysis_interval_min: configRes.config.analysis_interval_min,
-          strategy_name: configRes.config.strategy_name,
-          notification_enabled: configRes.config.notification_enabled,
-        });
         // DB values take priority — only fill missing fields from DEFAULT_CONFIG
         const loaded = { ...DEFAULT_CONFIG, ...configRes.config };
         // Detect which preset matches the DB prompt (if any)
