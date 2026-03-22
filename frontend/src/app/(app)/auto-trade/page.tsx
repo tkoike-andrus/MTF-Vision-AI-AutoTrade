@@ -1891,43 +1891,9 @@ export default function AutoTradePage() {
 
             {config.x_enabled && (
               <div className="space-y-4">
-                {/* ── API Credentials ── */}
-                <div className={`rounded-lg p-3 space-y-3 ${isDarkMode ? "bg-gray-900/50 border border-gray-800" : "bg-gray-50 border border-gray-200"}`}>
-                  <p className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>API認証情報</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className={`text-[10px] font-medium block mb-0.5 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>Consumer Key (API Key)</label>
-                      <input type="password" value={config.x_consumer_key || ""} onChange={(e) => setConfig({ ...config, x_consumer_key: e.target.value || null })} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
-                    </div>
-                    <div>
-                      <label className={`text-[10px] font-medium block mb-0.5 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>Consumer Secret (API Secret)</label>
-                      <input type="password" value={config.x_consumer_secret || ""} onChange={(e) => setConfig({ ...config, x_consumer_secret: e.target.value || null })} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
-                    </div>
-                    <div>
-                      <label className={`text-[10px] font-medium block mb-0.5 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>Access Token</label>
-                      <input type="password" value={config.x_access_token || ""} onChange={(e) => setConfig({ ...config, x_access_token: e.target.value || null })} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
-                    </div>
-                    <div>
-                      <label className={`text-[10px] font-medium block mb-0.5 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>Access Token Secret</label>
-                      <input type="password" value={config.x_access_token_secret || ""} onChange={(e) => setConfig({ ...config, x_access_token_secret: e.target.value || null })} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
-                    </div>
-                    <div>
-                      <label className={`text-[10px] font-medium block mb-0.5 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>Bearer Token</label>
-                      <input type="password" value={config.x_bearer_token || ""} onChange={(e) => setConfig({ ...config, x_bearer_token: e.target.value || null })} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
-                    </div>
-                    <div>
-                      <label className={`text-[10px] font-medium block mb-0.5 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>Client ID</label>
-                      <input type="password" value={config.x_client_id || ""} onChange={(e) => setConfig({ ...config, x_client_id: e.target.value || null })} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className={`text-[10px] font-medium block mb-0.5 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>Client Secret</label>
-                      <input type="password" value={config.x_client_secret || ""} onChange={(e) => setConfig({ ...config, x_client_secret: e.target.value || null })} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
-                    </div>
-                  </div>
-                  <p className={`text-[10px] ${isDarkMode ? "text-gray-600" : "text-gray-400"}`}>
-                    投稿にはConsumer Key/Secret + Access Token/Secretが必須です。App permissionsを<strong>Read and Write</strong>に設定してください。
-                  </p>
-                </div>
+                <p className={`text-[10px] ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>
+                  API認証情報は<strong>設定画面</strong>で入力してください。
+                </p>
 
                 {/* ── Big Trade Threshold ── */}
                 <div>

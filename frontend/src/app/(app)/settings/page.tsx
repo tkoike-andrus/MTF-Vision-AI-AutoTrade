@@ -13,6 +13,7 @@ import {
   MessageSquare,
   FolderOpen,
   Lock,
+  Twitter,
 } from "lucide-react";
 import { useTheme } from "@/lib/hooks/useTheme";
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -48,6 +49,15 @@ export default function SettingsPage() {
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState("");
   const [discordUserId, setDiscordUserId] = useState("");
   const [chartImageFolder, setChartImageFolder] = useState("");
+
+  // X (Twitter) API
+  const [xConsumerKey, setXConsumerKey] = useState("");
+  const [xConsumerSecret, setXConsumerSecret] = useState("");
+  const [xAccessToken, setXAccessToken] = useState("");
+  const [xAccessTokenSecret, setXAccessTokenSecret] = useState("");
+  const [xBearerToken, setXBearerToken] = useState("");
+  const [xClientId, setXClientId] = useState("");
+  const [xClientSecret, setXClientSecret] = useState("");
 
   // Password change
   const [newPassword, setNewPassword] = useState("");
@@ -86,7 +96,7 @@ export default function SettingsPage() {
       // Load GMO/Gemini API keys from bot_configs
       const botRes = await supabase
         .from("bot_configs")
-        .select("gmo_api_key_enc, gmo_api_secret_enc, gemini_api_key, discord_webhook_url, discord_user_id, chart_image_folder")
+        .select("gmo_api_key_enc, gmo_api_secret_enc, gemini_api_key, discord_webhook_url, discord_user_id, chart_image_folder, x_consumer_key, x_consumer_secret, x_access_token, x_access_token_secret, x_bearer_token, x_client_id, x_client_secret")
         .eq("user_id", userId)
         .single();
 
@@ -101,6 +111,14 @@ export default function SettingsPage() {
         if (!discordUserId && botRes.data.discord_user_id) {
           setDiscordUserId(botRes.data.discord_user_id);
         }
+        // X (Twitter) API
+        if (botRes.data.x_consumer_key) setXConsumerKey(botRes.data.x_consumer_key);
+        if (botRes.data.x_consumer_secret) setXConsumerSecret(botRes.data.x_consumer_secret);
+        if (botRes.data.x_access_token) setXAccessToken(botRes.data.x_access_token);
+        if (botRes.data.x_access_token_secret) setXAccessTokenSecret(botRes.data.x_access_token_secret);
+        if (botRes.data.x_bearer_token) setXBearerToken(botRes.data.x_bearer_token);
+        if (botRes.data.x_client_id) setXClientId(botRes.data.x_client_id);
+        if (botRes.data.x_client_secret) setXClientSecret(botRes.data.x_client_secret);
       }
 
       setLoading(false);
@@ -187,6 +205,13 @@ export default function SettingsPage() {
             discord_webhook_url: discordWebhookUrl || null,
             discord_user_id: discordUserId || null,
             chart_image_folder: chartImageFolder || null,
+            x_consumer_key: xConsumerKey || null,
+            x_consumer_secret: xConsumerSecret || null,
+            x_access_token: xAccessToken || null,
+            x_access_token_secret: xAccessTokenSecret || null,
+            x_bearer_token: xBearerToken || null,
+            x_client_id: xClientId || null,
+            x_client_secret: xClientSecret || null,
             updated_at: new Date().toISOString(),
           })
           .eq("user_id", userId);
@@ -210,6 +235,13 @@ export default function SettingsPage() {
             discord_webhook_url: discordWebhookUrl || null,
             discord_user_id: discordUserId || null,
             chart_image_folder: chartImageFolder || null,
+            x_consumer_key: xConsumerKey || null,
+            x_consumer_secret: xConsumerSecret || null,
+            x_access_token: xAccessToken || null,
+            x_access_token_secret: xAccessTokenSecret || null,
+            x_bearer_token: xBearerToken || null,
+            x_client_id: xClientId || null,
+            x_client_secret: xClientSecret || null,
           });
       }
 
@@ -386,6 +418,49 @@ export default function SettingsPage() {
             MT5 EAが4TFスクリーンショットを保存するフォルダを指定してください。m5.png / h1.png / h4.png / d1.png が必要です。
           </p>
         </div>
+      </section>
+
+      {/* X (Twitter) API */}
+      <section className={`rounded-xl border p-4 space-y-4 ${isDarkMode ? "bg-dark-card border-gray-800" : "bg-white border-gray-200"}`}>
+        <div className="flex items-center gap-2">
+          <Twitter size={16} className="text-sky-400" />
+          <h2 className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>X (Twitter) API認証</h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>Consumer Key (API Key)</label>
+            <input type="password" value={xConsumerKey} onChange={(e) => setXConsumerKey(e.target.value)} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
+          </div>
+          <div>
+            <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>Consumer Secret (API Secret)</label>
+            <input type="password" value={xConsumerSecret} onChange={(e) => setXConsumerSecret(e.target.value)} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
+          </div>
+          <div>
+            <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>Access Token</label>
+            <input type="password" value={xAccessToken} onChange={(e) => setXAccessToken(e.target.value)} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
+          </div>
+          <div>
+            <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>Access Token Secret</label>
+            <input type="password" value={xAccessTokenSecret} onChange={(e) => setXAccessTokenSecret(e.target.value)} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
+          </div>
+          <div>
+            <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>Bearer Token</label>
+            <input type="password" value={xBearerToken} onChange={(e) => setXBearerToken(e.target.value)} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
+          </div>
+          <div>
+            <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>Client ID</label>
+            <input type="password" value={xClientId} onChange={(e) => setXClientId(e.target.value)} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>Client Secret</label>
+            <input type="password" value={xClientSecret} onChange={(e) => setXClientSecret(e.target.value)} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
+          </div>
+        </div>
+
+        <p className={`text-xs ${isDarkMode ? "text-gray-600" : "text-gray-400"}`}>
+          投稿にはConsumer Key/Secret + Access Token/Secretが必須です。App permissionsを<strong>Read and Write</strong>に設定してください。
+        </p>
       </section>
 
       {/* Password Change */}
