@@ -947,19 +947,56 @@ export default function AutoTradePage() {
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className={`text-xl font-bold flex items-center gap-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
-            <Bot size={22} className="text-blue-400" />
-            自動売買
-          </h1>
-          <p className={`text-sm mt-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
-            MTF Vision AI × GMO Coin FX
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className={`text-xl font-bold flex items-center gap-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+              <Bot size={22} className="text-blue-400" />
+              自動売買
+            </h1>
+            <p className={`text-xs sm:text-sm mt-0.5 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
+              MTF Vision AI × GMO Coin FX
+            </p>
+          </div>
+          {/* Bot Start / Stop Buttons — mobile: right of title */}
+          <div className="flex items-center gap-2 sm:hidden">
+            <button
+              onClick={startBot}
+              disabled={config.is_active}
+              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold text-xs transition-all ${
+                config.is_active
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default"
+                  : "bg-blue-600 text-white hover:bg-blue-700 border border-blue-600"
+              }`}
+            >
+              {config.is_active && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+                </span>
+              )}
+              <Play size={12} />
+              {config.is_active ? "稼働中" : "起動"}
+            </button>
+            <button
+              onClick={stopBot}
+              disabled={!config.is_active}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold text-xs transition-all ${
+                config.is_active
+                  ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30"
+                  : isDarkMode
+                    ? "bg-gray-800 text-gray-600 border border-gray-700 cursor-default"
+                    : "bg-gray-100 text-gray-400 border border-gray-200 cursor-default"
+              }`}
+            >
+              <Square size={12} />
+              停止
+            </button>
+          </div>
         </div>
 
-        {/* Bot Start / Stop Buttons */}
-        <div className="flex items-center gap-2">
+        {/* Bot Start / Stop Buttons — desktop */}
+        <div className="hidden sm:flex items-center gap-2">
           <button
             onClick={startBot}
             disabled={config.is_active}
@@ -1037,14 +1074,14 @@ export default function AutoTradePage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 text-xs">
+                <div className="flex items-center gap-3 sm:gap-4 text-[10px] sm:text-xs">
                   <div className="text-center">
                     <p className={isDarkMode ? "text-gray-500" : "text-gray-400"}>次回分析</p>
                     <p className="text-emerald-400 font-mono font-bold">{nextAnalysisIn() || "—"}</p>
                   </div>
                   <div className="text-center">
                     <p className={isDarkMode ? "text-gray-500" : "text-gray-400"}>本日</p>
-                    <p className="text-emerald-400 font-mono font-bold">{todaySignals.length}信号 / {todayExecuted}約定</p>
+                    <p className="text-emerald-400 font-mono font-bold">{todaySignals.length}信号/{todayExecuted}約定</p>
                   </div>
                 </div>
               </div>
@@ -1263,13 +1300,13 @@ export default function AutoTradePage() {
                     });
 
                     return (
-                      <div key={i} className={`flex items-start gap-1.5 py-0.5 rounded px-1 group ${isDarkMode ? "hover:bg-white/[0.02]" : "hover:bg-gray-50"}`}>
-                        <span className={`shrink-0 w-[52px] ${isDarkMode ? "text-gray-700" : "text-gray-400"}`}>{time}</span>
+                      <div key={i} className={`flex items-start gap-1 sm:gap-1.5 py-0.5 rounded px-1 group ${isDarkMode ? "hover:bg-white/[0.02]" : "hover:bg-gray-50"}`}>
+                        <span className={`shrink-0 w-[44px] sm:w-[52px] text-[10px] sm:text-[11px] ${isDarkMode ? "text-gray-700" : "text-gray-400"}`}>{time}</span>
                         {categoryIcon}
-                        <span className={`shrink-0 w-[52px] text-[9px] font-bold uppercase ${categoryColor}`}>
-                          {log.category === "GMO_API" ? "GMO" : log.category.slice(0, 6)}
+                        <span className={`shrink-0 w-[36px] sm:w-[52px] text-[9px] font-bold uppercase ${categoryColor}`}>
+                          {log.category === "GMO_API" ? "GMO" : log.category.slice(0, 4)}
                         </span>
-                        <span className={levelColor}>{log.message}</span>
+                        <span className={`${levelColor} break-all`}>{log.message}</span>
                         {log.detail && typeof log.detail.api === "string" && (
                           <span className={`text-[9px] shrink-0 hidden group-hover:inline ${isDarkMode ? "text-gray-700" : "text-gray-400"}`}>
                             [{log.detail.api}]
@@ -1342,38 +1379,34 @@ export default function AutoTradePage() {
                     <div key={sig.id}>
                       <button
                         onClick={() => setExpandedSignalId(isExpanded ? null : sig.id)}
-                        className={`w-full px-4 py-2.5 flex items-center gap-3 text-xs transition-colors ${
+                        className={`w-full px-3 sm:px-4 py-2.5 text-xs transition-colors ${
                           isExpanded
                             ? isDarkMode ? "bg-dark-secondary/50" : "bg-gray-50"
                             : isDarkMode ? "hover:bg-dark-secondary/30" : "hover:bg-gray-50"
                         }`}
                       >
-                        <span className={`flex items-center gap-1 font-bold min-w-[52px] ${actionColor(sig.action)}`}>
-                          {actionIcon(sig.action)} {sig.action}
-                        </span>
-                        <span className={`font-mono min-w-[32px] ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>
-                          {(sig.confidence * 100).toFixed(0)}%
-                        </span>
-                        <span className={`flex-1 truncate text-left ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
-                          {sig.reason}
-                        </span>
-                        {sig.position_status && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDarkMode ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-500"}`}>
-                            {sig.position_status}
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <span className={`flex items-center gap-1 font-bold shrink-0 ${actionColor(sig.action)}`}>
+                            {actionIcon(sig.action)} {sig.action}
                           </span>
-                        )}
-                        {sig.chart_image_url && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDarkMode ? "bg-blue-500/15 text-blue-400" : "bg-blue-50 text-blue-600"}`}>📷</span>
-                        )}
-                        {sig.executed && (
-                          <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-bold">約定</span>
-                        )}
-                        <span className={`font-mono text-[10px] ${isDarkMode ? "text-gray-600" : "text-gray-400"}`}>
-                          {signalSource === "db"
-                            ? new Date(sig.created_at).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" }) + " " + new Date(sig.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })
-                            : new Date(sig.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })
-                          }
-                        </span>
+                          <span className={`font-mono shrink-0 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>
+                            {(sig.confidence * 100).toFixed(0)}%
+                          </span>
+                          <span className={`flex-1 truncate text-left ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                            {sig.reason}
+                          </span>
+                          <span className="flex items-center gap-1 shrink-0">
+                            {sig.executed && (
+                              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-bold">約定</span>
+                            )}
+                            <span className={`font-mono text-[10px] ${isDarkMode ? "text-gray-600" : "text-gray-400"}`}>
+                              {signalSource === "db"
+                                ? new Date(sig.created_at).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" }) + " " + new Date(sig.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })
+                                : new Date(sig.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })
+                              }
+                            </span>
+                          </span>
+                        </div>
                       </button>
 
                       {/* Expanded Detail */}
@@ -1522,20 +1555,17 @@ export default function AutoTradePage() {
                         CLOSED_SL: "text-red-400 bg-red-500/15",
                       };
                       return (
-                        <div key={order.id} className="px-4 py-2.5 text-xs">
-                          <div className="flex items-center gap-3">
-                            <span className={`font-bold min-w-[40px] ${order.side === "BUY" ? "text-emerald-400" : "text-red-400"}`}>
+                        <div key={order.id} className="px-3 sm:px-4 py-2.5 text-xs">
+                          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                            <span className={`font-bold ${order.side === "BUY" ? "text-emerald-400" : "text-red-400"}`}>
                               {order.side}
                             </span>
                             <span className={`font-mono ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
                               {order.symbol.replace("_", "/")}
                             </span>
                             <span className="font-mono text-gray-500">
-                              @{order.entry_price || "—"}
+                              @{order.entry_price || "—"}{order.exit_price ? ` → ${order.exit_price}` : ""}
                             </span>
-                            {order.exit_price && (
-                              <span className="font-mono text-gray-500">→ {order.exit_price}</span>
-                            )}
                             {order.pnl != null && (
                               <span className={`font-mono font-bold ${order.pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                                 {order.pnl >= 0 ? "+" : ""}¥{order.pnl.toLocaleString()}
@@ -1545,10 +1575,10 @@ export default function AutoTradePage() {
                               {statusLabel[order.status] || order.status}
                             </span>
                           </div>
-                          <div className={`flex items-center gap-3 mt-1 text-[10px] font-mono ${isDarkMode ? "text-gray-600" : "text-gray-400"}`}>
-                            <span>開始: {new Date(order.opened_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                          <div className={`flex items-center gap-2 mt-1 text-[10px] font-mono flex-wrap ${isDarkMode ? "text-gray-600" : "text-gray-400"}`}>
+                            <span>{new Date(order.opened_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
                             {order.closed_at && (
-                              <span>→ 決済: {new Date(order.closed_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                              <span>→ {new Date(order.closed_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
                             )}
                           </div>
                         </div>
@@ -1670,24 +1700,24 @@ export default function AutoTradePage() {
             {strategies.map((s) => {
               const isActive = config.strategy_name === s.name;
               return (
-                <div key={s.id} className={`${card} p-4 transition-all ${isActive ? (isDarkMode ? "ring-1 ring-blue-500/50" : "ring-1 ring-blue-300") : ""}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                <div key={s.id} className={`${card} p-3 sm:p-4 transition-all ${isActive ? (isDarkMode ? "ring-1 ring-blue-500/50" : "ring-1 ring-blue-300") : ""}`}>
+                  <div className="flex items-start sm:items-center justify-between gap-2">
+                    <div className="flex items-start sm:items-center gap-2 sm:gap-3 min-w-0">
+                      <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
                         isActive ? "bg-blue-500/20 text-blue-400" : isDarkMode ? "bg-dark-secondary text-gray-500" : "bg-gray-100 text-gray-400"
                       }`}>
                         {s.is_builtin ? "B" : "C"}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>{s.display_name}</h3>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className={`text-xs sm:text-sm font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>{s.display_name}</h3>
                           {isActive && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-bold">使用中</span>}
                           {s.is_builtin && <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDarkMode ? "bg-gray-800 text-gray-500" : "bg-gray-100 text-gray-400"}`}>ビルトイン</span>}
                         </div>
-                        <p className={`text-xs mt-0.5 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>{s.description || "説明なし"}</p>
+                        <p className={`text-[10px] sm:text-xs mt-0.5 truncate ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>{s.description || "説明なし"}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 shrink-0">
                       {!isActive && (
                         <button
                           onClick={async () => {
@@ -1750,7 +1780,7 @@ export default function AutoTradePage() {
             <h2 className={`text-sm font-bold flex items-center gap-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
               <Activity size={16} className="text-blue-400" /> 取引設定
             </h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>通貨ペア</label>
                 <select value={config.symbol} onChange={(e) => setConfig({ ...config, symbol: e.target.value })} className={inputCls}>
@@ -1855,7 +1885,7 @@ export default function AutoTradePage() {
                 {/* ── API Credentials ── */}
                 <div className={`rounded-lg p-3 space-y-3 ${isDarkMode ? "bg-gray-900/50 border border-gray-800" : "bg-gray-50 border border-gray-200"}`}>
                   <p className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>API認証情報</p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className={`text-[10px] font-medium block mb-0.5 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>Consumer Key (API Key)</label>
                       <input type="password" value={config.x_consumer_key || ""} onChange={(e) => setConfig({ ...config, x_consumer_key: e.target.value || null })} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
@@ -1880,7 +1910,7 @@ export default function AutoTradePage() {
                       <label className={`text-[10px] font-medium block mb-0.5 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>Client ID</label>
                       <input type="password" value={config.x_client_id || ""} onChange={(e) => setConfig({ ...config, x_client_id: e.target.value || null })} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
                     </div>
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                       <label className={`text-[10px] font-medium block mb-0.5 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>Client Secret</label>
                       <input type="password" value={config.x_client_secret || ""} onChange={(e) => setConfig({ ...config, x_client_secret: e.target.value || null })} placeholder="xxxxxxxxxx" className={inputCls + " font-mono text-xs"} />
                     </div>
