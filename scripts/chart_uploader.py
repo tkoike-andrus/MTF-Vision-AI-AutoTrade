@@ -2,13 +2,14 @@
 AATM Chart Uploader — MT5チャート画像をSupabase Storageへ自動アップロード
 
 使い方:
-  1. pip install supabase watchdog
+  1. pip install supabase
   2. chart_uploader.bat をダブルクリック（または chart_uploader.py を直接実行）
 
 動作:
-  - 5分足確定タイミング（00分, 05分, 10分, ...）+ 15秒後に画像をチェック
-  - 変更があればSupabase Storageに上書きアップロード
-  - MT5が動いている間、バックグラウンドで常駐
+  - 5分足確定直後（例: 12:00:05）にファイル変更をチェック
+  - 変更なければリトライ（12:00:07, 12:00:09）→ 最大N回
+  - 取引時間外はスリープ
+  - MD5ハッシュで差分検知 → 変更時のみアップロード
 """
 
 import os
@@ -26,15 +27,23 @@ except ImportError:
     sys.exit(1)
 
 # ============================================================
-# 設定
+# 設定（チューニング可能）
 # ============================================================
 CHART_FOLDER = r"C:\Users\surf_\AppData\Roaming\MetaQuotes\Terminal\EE0304F13905552AE0B5EAEFB04866EB\MQL5\Files\AATM_Charts"
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 BUCKET_NAME = "chart-images"
 CHART_FILES = ["m5.png", "h1.png", "h4.png", "d1.png"]
-UPLOAD_DELAY_SEC = 15  # 足確定後の待機秒数（MT5の画像生成を待つ）
-INTERVAL_MIN = 5       # 監視間隔（分）
+
+# ── タイミング設定 ──
+CANDLE_INTERVAL_MIN = 5    # 足の間隔（分）: 5 = M5足
+FIRST_CHECK_SEC = 5        # 足確定後、最初のチェックまでの秒数
+RETRY_INTERVAL_SEC = 2     # リトライ間隔（秒）
+MAX_RETRIES = 3            # 最大リトライ回数
+
+# ── 取引時間（JST） ──
+TRADE_START_HOUR = 8       # 取引開始時刻（JST）
+TRADE_END_HOUR = 15        # 取引終了時刻（JST） ※24超=翌日（例: 26=翌2時）
 
 # ============================================================
 # ハッシュでファイル変更を検出
@@ -42,7 +51,6 @@ INTERVAL_MIN = 5       # 監視間隔（分）
 last_hashes: dict[str, str] = {}
 
 def file_hash(path: str) -> str:
-    """ファイルのMD5ハッシュを返す"""
     try:
         with open(path, "rb") as f:
             return hashlib.md5(f.read()).hexdigest()
@@ -50,7 +58,6 @@ def file_hash(path: str) -> str:
         return ""
 
 def is_changed(path: str, filename: str) -> bool:
-    """前回アップロード時からファイルが変更されたか"""
     current = file_hash(path)
     if not current:
         return False
@@ -64,7 +71,6 @@ def is_changed(path: str, filename: str) -> bool:
 # Supabase Storageアップロード
 # ============================================================
 def upload_charts(client) -> int:
-    """変更されたチャート画像をアップロード。アップロード数を返す"""
     uploaded = 0
     for filename in CHART_FILES:
         filepath = os.path.join(CHART_FOLDER, filename)
@@ -76,8 +82,6 @@ def upload_charts(client) -> int:
                 data = f.read()
 
             storage_path = f"charts/{filename}"
-
-            # upsert=True で上書きアップロード（ディスク節約）
             client.storage.from_(BUCKET_NAME).upload(
                 path=storage_path,
                 file=data,
@@ -92,9 +96,7 @@ def upload_charts(client) -> int:
 
         except Exception as e:
             err_str = str(e)
-            # "already exists" は upsert で回避されるはずだが念のため
             if "already exists" in err_str.lower() or "Duplicate" in err_str:
-                # リトライ: update で上書き
                 try:
                     client.storage.from_(BUCKET_NAME).update(
                         path=storage_path,
@@ -111,28 +113,56 @@ def upload_charts(client) -> int:
     return uploaded
 
 # ============================================================
-# 次の5分足確定タイミングを計算
+# 取引時間判定
 # ============================================================
-def next_candle_time() -> datetime:
-    """次の5分足確定時刻 + UPLOAD_DELAY_SEC を返す"""
+def is_trading_hours() -> bool:
+    """現在がJST取引時間内かどうか"""
+    now = datetime.now()  # ローカル時間（JST前提）
+    hour = now.hour
+    if TRADE_END_HOUR > 24 and hour < TRADE_START_HOUR:
+        hour += 24
+    return TRADE_START_HOUR <= hour < TRADE_END_HOUR
+
+def next_trading_start() -> datetime:
+    """次の取引開始時刻を返す"""
+    now = datetime.now()
+    today_start = now.replace(hour=TRADE_START_HOUR, minute=0, second=0, microsecond=0)
+    if now < today_start:
+        return today_start
+    return today_start + timedelta(days=1)
+
+# ============================================================
+# 次の足確定チェック時刻を計算
+# ============================================================
+def next_check_time() -> datetime:
+    """
+    次の足確定 + FIRST_CHECK_SEC 後の時刻を返す
+    例: CANDLE_INTERVAL_MIN=5, FIRST_CHECK_SEC=5
+        現在 12:03:00 → 次回 12:05:05
+        現在 12:05:10 → 次回 12:10:05
+    """
     now = datetime.now()
     minute = now.minute
-    # 次の5分刻み
-    next_min = ((minute // INTERVAL_MIN) + 1) * INTERVAL_MIN
-    if next_min >= 60:
-        target = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-    else:
-        target = now.replace(minute=next_min, second=0, microsecond=0)
+    second = now.second
 
-    # MT5の画像生成を待つバッファ
-    target += timedelta(seconds=UPLOAD_DELAY_SEC)
+    # 次の足確定分（例: 5分刻み → 0, 5, 10, 15, ...）
+    next_candle_min = ((minute // CANDLE_INTERVAL_MIN) + 1) * CANDLE_INTERVAL_MIN
+
+    if next_candle_min >= 60:
+        target = now.replace(minute=0, second=FIRST_CHECK_SEC, microsecond=0) + timedelta(hours=1)
+    else:
+        target = now.replace(minute=next_candle_min, second=FIRST_CHECK_SEC, microsecond=0)
+
+    # もう過ぎていたら次のサイクルへ
+    if target <= now:
+        target += timedelta(minutes=CANDLE_INTERVAL_MIN)
+
     return target
 
 # ============================================================
 # バケット初期化
 # ============================================================
 def ensure_bucket(client):
-    """バケットが存在しなければ作成"""
     try:
         client.storage.get_bucket(BUCKET_NAME)
         print(f"  バケット '{BUCKET_NAME}' 確認OK")
@@ -155,7 +185,7 @@ def ensure_bucket(client):
 # ============================================================
 def main():
     print("=" * 60)
-    print("  AATM Chart Uploader v1.0")
+    print("  AATM Chart Uploader v1.1")
     print("  MT5チャート画像 → Supabase Storage 自動アップロード")
     print("=" * 60)
     print()
@@ -164,7 +194,6 @@ def main():
     url = SUPABASE_URL
     key = SUPABASE_KEY
 
-    # .env ファイルからの読み込みフォールバック
     env_file = Path(__file__).parent / ".env"
     if (not url or not key) and env_file.exists():
         print(f"  .env ファイルから読み込み: {env_file}")
@@ -188,24 +217,27 @@ def main():
         input("Enterキーで終了...")
         sys.exit(1)
 
+    # 取引時間表示
+    end_display = f"翌{TRADE_END_HOUR - 24}" if TRADE_END_HOUR > 24 else str(TRADE_END_HOUR)
+
     print(f"  監視フォルダ: {CHART_FOLDER}")
     print(f"  対象ファイル: {', '.join(CHART_FILES)}")
-    print(f"  監視間隔: {INTERVAL_MIN}分足確定 + {UPLOAD_DELAY_SEC}秒後")
+    print(f"  足間隔: {CANDLE_INTERVAL_MIN}分")
+    print(f"  チェック: 足確定+{FIRST_CHECK_SEC}秒後 → リトライ{RETRY_INTERVAL_SEC}秒×最大{MAX_RETRIES}回")
+    print(f"  取引時間: {TRADE_START_HOUR}:00〜{end_display}:00 JST")
     print(f"  Supabase: {url[:40]}...")
     print()
 
-    # フォルダ存在確認
     if not os.path.isdir(CHART_FOLDER):
         print(f"[ERROR] チャートフォルダが見つかりません: {CHART_FOLDER}")
         input("Enterキーで終了...")
         sys.exit(1)
 
-    # Supabase初期化
     client = create_client(url, key)
     ensure_bucket(client)
     print()
 
-    # 初回: 即座にアップロード
+    # 初回アップロード
     print(f"[{datetime.now().strftime('%H:%M:%S')}] 初回アップロード実行...")
     count = upload_charts(client)
     if count == 0:
@@ -218,23 +250,34 @@ def main():
 
     try:
         while True:
-            target = next_candle_time()
-            wait_sec = (target - datetime.now()).total_seconds()
-            if wait_sec < 0:
-                wait_sec += INTERVAL_MIN * 60
+            # ── 取引時間外チェック ──
+            if not is_trading_hours():
+                next_start = next_trading_start()
+                wait = (next_start - datetime.now()).total_seconds()
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] "
+                      f"取引時間外 → {next_start.strftime('%m/%d %H:%M')} までスリープ")
+                time.sleep(max(wait, 1))
+                continue
 
-            next_str = target.strftime("%H:%M:%S")
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] 次回チェック: {next_str} ({wait_sec:.0f}秒後)")
+            # ── 次の足確定チェック時刻まで待機 ──
+            target = next_check_time()
+            wait = (target - datetime.now()).total_seconds()
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] "
+                  f"次回チェック: {target.strftime('%H:%M:%S')} ({wait:.0f}秒後)")
+            time.sleep(max(wait, 0.5))
 
-            time.sleep(max(wait_sec, 1))
-
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] チャート画像チェック中...")
-            count = upload_charts(client)
-            if count == 0:
-                print("  変更なし")
-            else:
-                print(f"  {count}枚アップロード完了")
-            print()
+            # ── チェック + リトライ ──
+            for attempt in range(1, MAX_RETRIES + 1):
+                ts = datetime.now().strftime('%H:%M:%S')
+                count = upload_charts(client)
+                if count > 0:
+                    print(f"[{ts}] {count}枚アップロード完了 (試行{attempt})")
+                    break
+                if attempt < MAX_RETRIES:
+                    print(f"[{ts}] 変更なし (試行{attempt}/{MAX_RETRIES}) → {RETRY_INTERVAL_SEC}秒後リトライ")
+                    time.sleep(RETRY_INTERVAL_SEC)
+                else:
+                    print(f"[{ts}] 変更なし (試行{attempt}/{MAX_RETRIES}) → 次サイクルへ")
 
     except KeyboardInterrupt:
         print()

@@ -12,6 +12,7 @@ import {
   Check,
   MessageSquare,
   FolderOpen,
+  Lock,
 } from "lucide-react";
 import { useTheme } from "@/lib/hooks/useTheme";
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -47,6 +48,12 @@ export default function SettingsPage() {
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState("");
   const [discordUserId, setDiscordUserId] = useState("");
   const [chartImageFolder, setChartImageFolder] = useState("");
+
+  // Password change
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwResult, setPwResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -100,6 +107,37 @@ export default function SettingsPage() {
     }
     load();
   }, [authLoading, userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePasswordChange = async () => {
+    setPwResult(null);
+    if (!newPassword || !confirmPassword) {
+      setPwResult({ ok: false, msg: "新しいパスワードを入力してください" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPwResult({ ok: false, msg: "パスワードは6文字以上で入力してください" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwResult({ ok: false, msg: "新しいパスワードが一致しません" });
+      return;
+    }
+    setPwSaving(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setPwResult({ ok: false, msg: error.message });
+      } else {
+        setPwResult({ ok: true, msg: "パスワードを変更しました" });
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    } catch (err) {
+      setPwResult({ ok: false, msg: err instanceof Error ? err.message : "エラーが発生しました" });
+    }
+    setPwSaving(false);
+  };
 
   const handleSave = async () => {
     if (!profile || !userId) return;
@@ -348,6 +386,39 @@ export default function SettingsPage() {
             MT5 EAが4TFスクリーンショットを保存するフォルダを指定してください。m5.png / h1.png / h4.png / d1.png が必要です。
           </p>
         </div>
+      </section>
+
+      {/* Password Change */}
+      <section className={`rounded-xl border p-4 space-y-4 ${isDarkMode ? "bg-dark-card border-gray-800" : "bg-white border-gray-200"}`}>
+        <div className="flex items-center gap-2">
+          <Lock size={16} className="text-amber-400" />
+          <h2 className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>パスワード変更</h2>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>新しいパスワード</label>
+            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="6文字以上" className={inputCls} />
+          </div>
+          <div>
+            <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>新しいパスワード（確認）</label>
+            <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="もう一度入力" className={inputCls} />
+          </div>
+        </div>
+
+        {pwResult && (
+          <div className={`rounded-lg p-2.5 text-xs font-medium ${pwResult.ok ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
+            {pwResult.msg}
+          </div>
+        )}
+
+        <button
+          onClick={handlePasswordChange}
+          disabled={pwSaving || !newPassword || !confirmPassword}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${isDarkMode ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" : "bg-amber-50 text-amber-600 hover:bg-amber-100"} disabled:opacity-50`}
+        >
+          <Lock size={14} /> {pwSaving ? "変更中..." : "パスワードを変更"}
+        </button>
       </section>
 
       {/* Error */}
