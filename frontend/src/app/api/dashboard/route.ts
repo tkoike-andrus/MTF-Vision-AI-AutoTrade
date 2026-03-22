@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/dashboard?user_id=xxx — Load dashboard data (trades, profile)
  * Uses service_role to bypass RLS issues with browser client

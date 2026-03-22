@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { STRATEGY_TEMPLATES } from "@/lib/strategies";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/strategies?user_id=xxx — List all strategies (built-in + custom)
  * POST /api/strategies — Create a new custom strategy

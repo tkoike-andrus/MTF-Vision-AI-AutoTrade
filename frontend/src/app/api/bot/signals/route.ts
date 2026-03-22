@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/bot/signals?user_id=xxx&from=2026-03-17&to=2026-03-21
  * Fetch trade signals from DB with optional date range filter.

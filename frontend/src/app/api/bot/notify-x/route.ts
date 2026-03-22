@@ -3,6 +3,8 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { postTradeToX } from "@/lib/notifications/x-post";
 import { generateTweetText, type TweetAction } from "@/lib/ai/tweet-generator";
 
+export const dynamic = 'force-dynamic';
+
 type NotifyEvent = "bot_start" | "bot_stop" | "api_error" | "connection_error" | "custom";
 
 interface NotifyBody {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
+export const dynamic = 'force-dynamic';
+
 const GMO_PUBLIC_API = "https://forex-api.coin.z.com/public";
 
 const SHORT_RESOLUTIONS = ["1min", "5min", "10min", "15min", "30min", "1hour"];

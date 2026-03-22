@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/bot/config?user_id=xxx — Load bot config & state
  * PUT /api/bot/config — Update bot config

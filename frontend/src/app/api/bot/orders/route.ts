@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/bot/orders?user_id=xxx&from=2026-03-17&to=2026-03-21
  * Fetch auto_trade_orders with optional date range filter

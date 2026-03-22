@@ -3,6 +3,8 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { readFile, stat } from "fs/promises";
 import { join } from "path";
 
+export const dynamic = 'force-dynamic';
+
 const CHART_FILES = [
   { file: "m5.png", label: "5分足" },
   { file: "h1.png", label: "1時間足" },

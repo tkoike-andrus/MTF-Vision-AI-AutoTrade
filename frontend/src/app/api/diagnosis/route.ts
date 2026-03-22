@@ -7,6 +7,8 @@ import {
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import type { Trade } from "@/lib/types/database";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

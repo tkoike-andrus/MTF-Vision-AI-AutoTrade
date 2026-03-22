@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/strategies/proposals?user_id=xxx — List pending proposals
  * POST /api/strategies/proposals — Create a new proposal (from AI diagnosis)

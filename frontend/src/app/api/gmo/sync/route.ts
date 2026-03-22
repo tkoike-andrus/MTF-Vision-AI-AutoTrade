@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { fetchGmoExecutions } from "@/lib/gmo/executions";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * POST /api/gmo/sync
  * Fetch GMO Coin FX executions and save as trades
