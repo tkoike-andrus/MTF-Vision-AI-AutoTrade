@@ -353,16 +353,20 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Step 5.5: Load chart images ──
+    // PC (localhost): ローカルフォルダ直読み優先
+    // Vercel (スマホ): Supabase Storage から取得
     let chartImages: string[] = [];
     let chartTimeframes: string[] = [];
+    const CHART_BUCKET = "chart-images";
+    const isVercel = !!process.env.VERCEL;
 
     if (chart_image) {
       chartImages = [chart_image];
       chartTimeframes = ["チャート"];
       await log("CHART", "SUCCESS", "アップロードされたチャート画像を使用");
-    } else if (config.chart_image_folder) {
-      await log("CHART", "INFO", `チャート画像フォルダをスキャン中: ${config.chart_image_folder}`);
-
+    } else if (!isVercel && config.chart_image_folder) {
+      // ── PC: ローカルファイルシステムから直接読み込み ──
+      await log("CHART", "INFO", `ローカルフォルダをスキャン中: ${config.chart_image_folder}`);
       for (let i = 0; i < MTF_CHART_FILES.length; i++) {
         const filePath = join(config.chart_image_folder, MTF_CHART_FILES[i]);
         try {
@@ -379,14 +383,34 @@ export async function POST(request: NextRequest) {
           await log("CHART", "WARN", `${MTF_TIMEFRAMES[i]} (${MTF_CHART_FILES[i]}) が見つかりません`);
         }
       }
-
       if (chartImages.length > 0) {
-        await log("CHART", "SUCCESS", `MTFチャート ${chartImages.length}/${MTF_CHART_FILES.length}枚を読み込み完了: ${chartTimeframes.join(", ")}`);
+        await log("CHART", "SUCCESS", `ローカルから ${chartImages.length}/${MTF_CHART_FILES.length}枚を読み込み完了: ${chartTimeframes.join(", ")}`);
       } else {
         await log("CHART", "WARN", "有効なチャート画像が見つかりません（テキストのみで分析）");
       }
     } else {
-      await log("CHART", "INFO", "チャート画像フォルダ未設定（テキストのみで分析）");
+      // ── Vercel (スマホ): Supabase Storageから取得 ──
+      await log("CHART", "INFO", "Supabase Storageからチャート画像を取得中...");
+      for (let i = 0; i < MTF_CHART_FILES.length; i++) {
+        const storagePath = `charts/${MTF_CHART_FILES[i]}`;
+        try {
+          const { data, error } = await supabase.storage
+            .from(CHART_BUCKET)
+            .download(storagePath);
+          if (!error && data) {
+            const buffer = Buffer.from(await data.arrayBuffer());
+            chartImages.push(buffer.toString("base64"));
+            chartTimeframes.push(MTF_TIMEFRAMES[i]);
+          }
+        } catch {
+          await log("CHART", "WARN", `${MTF_TIMEFRAMES[i]} (${MTF_CHART_FILES[i]}) をStorageから取得できません`);
+        }
+      }
+      if (chartImages.length > 0) {
+        await log("CHART", "SUCCESS", `Supabase Storageから ${chartImages.length}/${MTF_CHART_FILES.length}枚を読み込み完了: ${chartTimeframes.join(", ")}`);
+      } else {
+        await log("CHART", "WARN", "チャート画像が見つかりません（テキストのみで分析）");
+      }
     }
 
     // ── Step 6: Call Gemini Vision AI ──

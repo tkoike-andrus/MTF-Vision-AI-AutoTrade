@@ -151,6 +151,18 @@ export default function Sidebar() {
             </Link>
           );
         })}
+        {/* Theme toggle for mobile */}
+        <button
+          onClick={toggleTheme}
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors ${
+            isDarkMode
+              ? "text-yellow-400"
+              : "text-gray-400"
+          }`}
+        >
+          {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          {isDarkMode ? "ライト" : "ダーク"}
+        </button>
       </nav>
     </>
   );

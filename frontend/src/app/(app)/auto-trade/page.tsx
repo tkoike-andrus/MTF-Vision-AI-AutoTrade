@@ -617,25 +617,34 @@ export default function AutoTradePage() {
     setTimeout(() => setOrderCopied(false), 2000);
   }, [orders, dbOrders, orderSearchMode]);
 
-  // Toggle bot active
-  const toggleBot = useCallback(async () => {
-    const newConfig = { ...config, is_active: !config.is_active };
+  // Start bot
+  const startBot = useCallback(async () => {
+    if (config.is_active) return;
+    const newConfig = { ...config, is_active: true };
     setConfig(newConfig);
-    addLocalLog("SYSTEM", newConfig.is_active ? "SUCCESS" : "WARN",
-      newConfig.is_active
-        ? `Bot起動: ${config.symbol.replace("_", "/")} / ${config.strategy_name} / ${config.analysis_interval_min}分間隔`
-        : "Bot停止"
+    addLocalLog("SYSTEM", "SUCCESS",
+      `Bot起動: ${config.symbol.replace("_", "/")} / ${config.strategy_name} / ${config.analysis_interval_min}分間隔`
     );
     if (!userId) return;
-
-    // Save config first — must complete before X notification
     await fetch("/api/bot/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: userId, ...newConfig }),
     });
+  }, [userId, config, addLocalLog]);
 
-    // Bot start/stop: X notification disabled (BUY/SELL/EXIT only)
+  // Stop bot
+  const stopBot = useCallback(async () => {
+    if (!config.is_active) return;
+    const newConfig = { ...config, is_active: false };
+    setConfig(newConfig);
+    addLocalLog("SYSTEM", "WARN", "Bot停止");
+    if (!userId) return;
+    await fetch("/api/bot/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, ...newConfig }),
+    });
   }, [userId, config, addLocalLog]);
 
   // Manual analysis
@@ -952,27 +961,41 @@ export default function AutoTradePage() {
           </p>
         </div>
 
-        {/* Bot Toggle — enhanced with pulse */}
-        <button
-          onClick={toggleBot}
-          className={`relative flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
-            config.is_active
-              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30"
-              : "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30"
-          }`}
-        >
-          {config.is_active && (
-            <span className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
-            </span>
-          )}
-          {config.is_active ? (
-            <><Square size={14} /> Bot 停止</>
-          ) : (
-            <><Play size={14} /> Bot 起動</>
-          )}
-        </button>
+        {/* Bot Start / Stop Buttons */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={startBot}
+            disabled={config.is_active}
+            className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
+              config.is_active
+                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default"
+                : "bg-blue-600 text-white hover:bg-blue-700 border border-blue-600"
+            }`}
+          >
+            {config.is_active && (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+              </span>
+            )}
+            <Play size={14} />
+            {config.is_active ? "稼働中" : "起動"}
+          </button>
+          <button
+            onClick={stopBot}
+            disabled={!config.is_active}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
+              config.is_active
+                ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30"
+                : isDarkMode
+                  ? "bg-gray-800 text-gray-600 border border-gray-700 cursor-default"
+                  : "bg-gray-100 text-gray-400 border border-gray-200 cursor-default"
+            }`}
+          >
+            <Square size={14} />
+            停止
+          </button>
+        </div>
       </div>
 
       {/* Tab Selector — 3 tabs */}
