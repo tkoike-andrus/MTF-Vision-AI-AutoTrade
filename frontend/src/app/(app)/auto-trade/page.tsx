@@ -459,17 +459,26 @@ export default function AutoTradePage() {
     setSaved(false);
     setSaveError(null);
     try {
+      // Validate numeric fields (fallback to defaults if empty/0)
+      const lot_size = config.lot_size || 10000;
+      const analysis_interval_min = config.analysis_interval_min || 5;
+      const trade_start_hour = config.trade_start_hour ?? 8;
+      const trade_end_hour = config.trade_end_hour || 15;
+
+      // Update local state with validated values
+      setConfig(prev => ({ ...prev, lot_size, analysis_interval_min, trade_start_hour, trade_end_hour }));
+
       // Explicitly pick saveable fields (exclude id, created_at, etc.)
       const payload = {
         user_id: userId,
         is_active: config.is_active,
         symbol: config.symbol,
         strategy_name: config.strategy_name,
-        lot_size: config.lot_size,
+        lot_size,
         max_positions: config.max_positions,
-        trade_start_hour: config.trade_start_hour,
-        trade_end_hour: config.trade_end_hour,
-        analysis_interval_min: config.analysis_interval_min,
+        trade_start_hour,
+        trade_end_hour,
+        analysis_interval_min,
         discord_webhook_url: config.discord_webhook_url,
         discord_user_id: config.discord_user_id,
         gmo_api_key_enc: config.gmo_api_key_enc,
@@ -1795,20 +1804,20 @@ export default function AutoTradePage() {
               </div>
               <div>
                 <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>取引数量（通貨単位）</label>
-                <input type="number" min={1000} step={1000} value={config.lot_size} onChange={(e) => setConfig({ ...config, lot_size: parseInt(e.target.value) || 10000 })} className={inputCls + " font-mono"} />
+                <input type="number" min={1000} step={1000} value={config.lot_size || ""} onChange={(e) => setConfig({ ...config, lot_size: e.target.value === "" ? 0 : parseInt(e.target.value) })} className={inputCls + " font-mono"} />
                 <p className={`text-[10px] mt-0.5 ${isDarkMode ? "text-gray-600" : "text-gray-400"}`}>GMOコインFX最小単位: 10,000通貨</p>
               </div>
               <div>
                 <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>分析間隔 (分)</label>
-                <input type="number" min={1} max={60} value={config.analysis_interval_min} onChange={(e) => setConfig({ ...config, analysis_interval_min: parseInt(e.target.value) || 5 })} className={inputCls + " font-mono"} />
+                <input type="number" min={1} max={60} value={config.analysis_interval_min || ""} onChange={(e) => setConfig({ ...config, analysis_interval_min: e.target.value === "" ? 0 : parseInt(e.target.value) })} className={inputCls + " font-mono"} />
               </div>
               <div>
                 <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>取引開始 (JST)</label>
-                <input type="number" min={0} max={23} value={config.trade_start_hour} onChange={(e) => setConfig({ ...config, trade_start_hour: Math.min(23, Math.max(0, parseInt(e.target.value) || 0)) })} className={inputCls + " font-mono"} />
+                <input type="number" min={0} max={23} value={config.trade_start_hour ?? ""} onChange={(e) => setConfig({ ...config, trade_start_hour: e.target.value === "" ? 0 : Math.min(23, Math.max(0, parseInt(e.target.value))) })} className={inputCls + " font-mono"} />
               </div>
               <div>
                 <label className={`text-xs font-medium block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>取引終了 (JST)</label>
-                <input type="number" min={1} max={30} value={config.trade_end_hour} onChange={(e) => setConfig({ ...config, trade_end_hour: Math.min(30, Math.max(1, parseInt(e.target.value) || 15)) })} className={inputCls + " font-mono"} />
+                <input type="number" min={1} max={30} value={config.trade_end_hour || ""} onChange={(e) => setConfig({ ...config, trade_end_hour: e.target.value === "" ? 0 : Math.min(30, Math.max(1, parseInt(e.target.value))) })} className={inputCls + " font-mono"} />
                 <p className={`text-[10px] mt-0.5 ${isDarkMode ? "text-gray-600" : "text-gray-400"}`}>
                   24超=翌日 (例: 26=翌2時){config.trade_end_hour > 24 && ` → ${config.trade_start_hour}:00〜翌${config.trade_end_hour - 24}:00`}
                 </p>
