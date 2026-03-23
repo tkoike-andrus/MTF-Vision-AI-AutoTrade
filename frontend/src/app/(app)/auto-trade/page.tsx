@@ -428,12 +428,17 @@ export default function AutoTradePage() {
       if (data.monthlyPnl !== undefined) setMonthlyPnl(data.monthlyPnl);
       // 別デバイスからBot停止された場合を検知
       if (data.config && data.config.is_active === false) {
-        addLocalLog("SYSTEM", "WARN", "別のデバイスからBotが停止されました。ローカルも停止します。");
+        setActivityLogs((prev) => [{
+          timestamp: new Date().toISOString(),
+          category: "SYSTEM" as const,
+          level: "WARN" as const,
+          message: "別のデバイスからBotが停止されました。ローカルも停止します。",
+        }, ...prev].slice(0, 200));
         setConfig((prev) => ({ ...prev, is_active: false }));
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [config.is_active, userId, addLocalLog]);
+  }, [config.is_active, userId]);
 
   // Add activity logs helper
   const addActivityLogs = useCallback((newLogs: ActivityLog[]) => {
