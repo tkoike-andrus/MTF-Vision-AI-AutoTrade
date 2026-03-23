@@ -716,7 +716,13 @@ export default function AutoTradePage() {
             );
           }
         } else if (data.error) {
-          addLocalLog("ERROR", "ERROR", `エラー: ${data.error}`);
+          // DB側でis_active=falseになっている場合（外部デバイスから停止された）
+          if (data.error === "Bot is not active") {
+            addLocalLog("SYSTEM", "WARN", "別のデバイスからBotが停止されました。ローカルも停止します。");
+            setConfig((prev) => ({ ...prev, is_active: false }));
+          } else {
+            addLocalLog("ERROR", "ERROR", `エラー: ${data.error}`);
+          }
         } else if (data.skipped) {
           // Skipped logs already come from server activity_logs
         }
