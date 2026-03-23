@@ -426,9 +426,14 @@ export default function AutoTradePage() {
       if (data.state) setState(data.state);
       if (data.recentOrders) setOrders(data.recentOrders);
       if (data.monthlyPnl !== undefined) setMonthlyPnl(data.monthlyPnl);
+      // 別デバイスからBot停止された場合を検知
+      if (data.config && data.config.is_active === false) {
+        addLocalLog("SYSTEM", "WARN", "別のデバイスからBotが停止されました。ローカルも停止します。");
+        setConfig((prev) => ({ ...prev, is_active: false }));
+      }
     }, 30000);
     return () => clearInterval(interval);
-  }, [config.is_active, userId]);
+  }, [config.is_active, userId, addLocalLog]);
 
   // Add activity logs helper
   const addActivityLogs = useCallback((newLogs: ActivityLog[]) => {
@@ -679,6 +684,19 @@ export default function AutoTradePage() {
         });
         const data = await res.json();
 
+        // Bot停止検知: APIが400を返した場合（別デバイスからis_active=falseに変更された）
+        if (!res.ok && data.error) {
+          if (res.status === 400) {
+            addLocalLog("SYSTEM", "WARN", "別のデバイスからBotが停止されました。ローカルも停止します。");
+            setConfig((prev) => ({ ...prev, is_active: false }));
+          } else {
+            addLocalLog("ERROR", "ERROR", `エラー: ${data.error}`);
+          }
+          setAnalyzing(false);
+          setAnalysisStep(null);
+          return;
+        }
+
         // Merge activity logs from server response
         if (data.activity_logs && Array.isArray(data.activity_logs)) {
           addActivityLogs(data.activity_logs);
@@ -717,14 +735,6 @@ export default function AutoTradePage() {
                   }
                 : prev
             );
-          }
-        } else if (data.error) {
-          // DB側でis_active=falseになっている場合（外部デバイスから停止された）
-          if (typeof data.error === "string" && data.error.includes("not active")) {
-            addLocalLog("SYSTEM", "WARN", "別のデバイスからBotが停止されました。ローカルも停止します。");
-            setConfig((prev) => ({ ...prev, is_active: false }));
-          } else {
-            addLocalLog("ERROR", "ERROR", `エラー: ${data.error}`);
           }
         } else if (data.skipped) {
           // Skipped logs already come from server activity_logs
@@ -1206,21 +1216,20 @@ export default function AutoTradePage() {
             </div>
 
             <div className={card + " p-3"}>
-              <p className={label}>本日損益</p>
-              <p className={`text-lg font-bold font-mono mt-1 ${
-                (state?.daily_pnl || 0) >= 0 ? "text-emerald-400" : "text-red-400"
-              }`}>
-                {(state?.daily_pnl || 0) >= 0 ? "+" : ""}¥{(state?.daily_pnl || 0).toLocaleString()}
-              </p>
-            </div>
-
-            <div className={card + " p-3"}>
-              <p className={label}>当月損益</p>
-              <p className={`text-lg font-bold font-mono mt-1 ${
-                monthlyPnl >= 0 ? "text-emerald-400" : "text-red-400"
-              }`}>
-                {monthlyPnl >= 0 ? "+" : ""}¥{monthlyPnl.toLocaleString()}
-              </p>
+              <p className={label}>損益（日 / 月）</p>
+              <div className="flex items-baseline gap-1 mt-1">
+                <p className={`text-lg font-bold font-mono ${
+                  (state?.daily_pnl || 0) >= 0 ? "text-emerald-400" : "text-red-400"
+                }`}>
+                  {(state?.daily_pnl || 0) >= 0 ? "+" : ""}¥{(state?.daily_pnl || 0).toLocaleString()}
+                </p>
+                <span className={`text-[10px] ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>/</span>
+                <p className={`text-xs font-bold font-mono ${
+                  monthlyPnl >= 0 ? "text-emerald-400" : "text-red-400"
+                }`}>
+                  {monthlyPnl >= 0 ? "+" : ""}¥{monthlyPnl.toLocaleString()}
+                </p>
+              </div>
             </div>
           </div>
 
