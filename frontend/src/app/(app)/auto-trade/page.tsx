@@ -329,6 +329,8 @@ export default function AutoTradePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [phaseSaving, setPhaseSaving] = useState(false);
+  const [phaseSaved, setPhaseSaved] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [chartStatus, setChartStatus] = useState<{ count: number; errors: string[]; folder: string } | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -1777,6 +1779,35 @@ export default function AutoTradePage() {
                 />
               </div>
             </div>
+            <button
+              onClick={async () => {
+                if (!userId) return;
+                setPhaseSaving(true);
+                setPhaseSaved(false);
+                try {
+                  await fetch("/api/bot/config", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      user_id: userId,
+                      phase_battle_pips: config.phase_battle_pips,
+                      post_trade_cooldown_min: config.post_trade_cooldown_min,
+                    }),
+                  });
+                  setPhaseSaved(true);
+                  setTimeout(() => setPhaseSaved(false), 3000);
+                } catch (err) {
+                  console.error("Phase config save error:", err);
+                }
+                setPhaseSaving(false);
+              }}
+              disabled={phaseSaving}
+              className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg font-bold text-xs transition-all ${
+                phaseSaved ? "bg-emerald-500 text-white" : "bg-cyan-500 hover:bg-cyan-600 text-white"
+              } disabled:opacity-50`}
+            >
+              {phaseSaved ? <><Check size={14} /> 保存しました</> : phaseSaving ? "保存中..." : <><Save size={14} /> フェーズ設定を保存</>}
+            </button>
           </div>
 
           {/* System Common Prompt (Read-only) */}
