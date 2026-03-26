@@ -42,6 +42,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 BUCKET_NAME = "chart-images"
 CHART_FILES = ["m5.png", "h1.png", "h4.png", "d1.png"]
+SR_LEVELS_FILE = "sr_levels.json"   # フェーズ判定用SRレベルファイル
 
 # ── 画像リサイズ設定 ──
 RESIZE_MAX_PX = 1024           # 長辺の最大ピクセル数（0=リサイズ無効）
@@ -55,7 +56,7 @@ MAX_RETRIES = 3            # 最大リトライ回数
 
 # ── 取引時間（JST） ──
 TRADE_START_HOUR = 8       # 取引開始時刻（JST）
-TRADE_END_HOUR = 15        # 取引終了時刻（JST） ※24超=翌日（例: 26=翌2時）
+TRADE_END_HOUR = 30        # 取引終了時刻（JST） ※24超=翌日（例: 26=翌2時）
 
 # ============================================================
 # ハッシュでファイル変更を検出
@@ -165,6 +166,39 @@ def upload_charts(client) -> int:
                     print(f"  [ERROR] {filename}: {e2}")
             else:
                 print(f"  [ERROR] {filename}: {e}")
+
+    # ── sr_levels.json のアップロード ──
+    sr_path = os.path.join(CHART_FOLDER, SR_LEVELS_FILE)
+    if os.path.isfile(sr_path) and is_changed(sr_path, SR_LEVELS_FILE):
+        try:
+            with open(sr_path, "rb") as f:
+                sr_data = f.read()
+            storage_path = f"charts/{SR_LEVELS_FILE}"
+            client.storage.from_(BUCKET_NAME).upload(
+                path=storage_path,
+                file=sr_data,
+                file_options={
+                    "content-type": "application/json",
+                    "upsert": "true",
+                },
+            )
+            print(f"  [UPLOAD] {SR_LEVELS_FILE} ({len(sr_data)}B)")
+            uploaded += 1
+        except Exception as e:
+            err_str = str(e)
+            if "already exists" in err_str.lower() or "Duplicate" in err_str:
+                try:
+                    client.storage.from_(BUCKET_NAME).update(
+                        path=f"charts/{SR_LEVELS_FILE}",
+                        file=sr_data,
+                        file_options={"content-type": "application/json"},
+                    )
+                    print(f"  [UPDATE] {SR_LEVELS_FILE}")
+                    uploaded += 1
+                except Exception as e2:
+                    print(f"  [ERROR] {SR_LEVELS_FILE}: {e2}")
+            else:
+                print(f"  [ERROR] {SR_LEVELS_FILE}: {e}")
 
     return uploaded
 

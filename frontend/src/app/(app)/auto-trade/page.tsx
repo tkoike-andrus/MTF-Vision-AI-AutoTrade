@@ -70,6 +70,10 @@ interface BotConfig {
   x_tweet_prompt_drama: string | null;
   x_tweet_preset: string;
   x_big_trade_threshold: number;
+  // Phase settings (API cost optimization)
+  phase_battle_pips: number;
+  phase_battle_interval_min: number;
+  post_trade_cooldown_min: number;
 }
 
 interface BotState {
@@ -299,6 +303,9 @@ const DEFAULT_CONFIG: BotConfig = {
   x_tweet_prompt_drama: null,
   x_tweet_preset: "casual",
   x_big_trade_threshold: 10000,
+  phase_battle_pips: 12,
+  phase_battle_interval_min: 5,
+  post_trade_cooldown_min: 5,
 };
 
 export default function AutoTradePage() {
@@ -329,6 +336,9 @@ export default function AutoTradePage() {
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [analysisStep, setAnalysisStep] = useState<string | null>(null);
   const activityEndRef = useRef<HTMLDivElement>(null);
+  const [currentPhase, setCurrentPhase] = useState<"ENVIRONMENT" | "BATTLE" | "STANDBY" | "COOLDOWN" | null>(null);
+  const [phaseReason, setPhaseReason] = useState<string>("");
+  const [srDistancePips, setSrDistancePips] = useState<number | null>(null);
 
   // Signal detail state
   const [expandedSignalId, setExpandedSignalId] = useState<string | null>(null);
@@ -511,6 +521,9 @@ export default function AutoTradePage() {
         x_tweet_prompt_drama: config.x_tweet_prompt_drama,
         x_tweet_preset: config.x_tweet_preset,
         x_big_trade_threshold: config.x_big_trade_threshold,
+        phase_battle_pips: config.phase_battle_pips,
+        phase_battle_interval_min: config.phase_battle_interval_min,
+        post_trade_cooldown_min: config.post_trade_cooldown_min,
       };
       console.log("[SaveConfig] payload x_tweet_prompt length:", config.x_tweet_prompt?.length, "x_tweet_prompt_drama length:", config.x_tweet_prompt_drama?.length);
       const res = await fetch("/api/bot/config", {
@@ -669,13 +682,14 @@ export default function AutoTradePage() {
 
   // Manual analysis
   const runAnalysis = useCallback(
-    async () => {
+    async (options?: { phase_a?: boolean }) => {
       if (!userId) return;
       setAnalyzing(true);
       setAnalysisStep("設定読み込み中...");
 
       // Add pre-request log
-      addLocalLog("SYSTEM", "INFO", `分析リクエスト送信中... (${config.is_active ? "ライブ" : "ドライラン"})`);
+      const phaseLabel = options?.phase_a ? "環境認識" : config.is_active ? "ライブ" : "ドライラン";
+      addLocalLog("SYSTEM", "INFO", `分析リクエスト送信中... (${phaseLabel})`);
 
       try {
         setAnalysisStep("AI解析中...");
@@ -685,9 +699,17 @@ export default function AutoTradePage() {
           body: JSON.stringify({
             user_id: userId,
             dry_run: !config.is_active,
+            phase_a: options?.phase_a || false,
           }),
         });
         const data = await res.json();
+
+        // Update phase info from response
+        if (data.phase) {
+          setCurrentPhase(data.phase);
+          if (data.reason) setPhaseReason(data.reason);
+          if (data.min_distance_pips !== undefined) setSrDistancePips(data.min_distance_pips);
+        }
 
         // Bot停止検知: APIが400を返した場合（別デバイスからis_active=falseに変更された）
         if (!res.ok && data.error) {
@@ -805,11 +827,29 @@ export default function AutoTradePage() {
       return msUntil > 0 ? msUntil : intervalMin * 60 * 1000 + 5000;
     };
 
-    // Schedule next analysis recursively
+    // Phase-check: lightweight distance check (no Gemini)
+    const checkPhase = async (): Promise<"BATTLE" | "STANDBY" | "COOLDOWN" | "ENVIRONMENT"> => {
+      // H1 bar close = minute 0 → environment recognition
+      const now = new Date();
+      if (now.getMinutes() < 1) return "ENVIRONMENT";
+
+      try {
+        const res = await fetch(`/api/bot/phase-check?user_id=${userId}`, { cache: "no-store" });
+        const data = await res.json();
+        setCurrentPhase(data.phase);
+        setPhaseReason(data.reason || "");
+        setSrDistancePips(data.min_distance_pips ?? null);
+        return data.phase || "BATTLE";
+      } catch {
+        return "BATTLE"; // Fail-open: call Gemini on error
+      }
+    };
+
+    // Schedule next analysis recursively (phase-aware)
     const scheduleNext = () => {
       const msUntil = getMsUntilNextCandle();
       const nextTime = new Date(Date.now() + msUntil);
-      console.log(`[Bot] 次回分析: ${nextTime.toLocaleTimeString("ja-JP")} (${Math.round(msUntil / 1000)}秒後)`);
+      console.log(`[Bot] 次回チェック: ${nextTime.toLocaleTimeString("ja-JP")} (${Math.round(msUntil / 1000)}秒後)`);
 
       analyzeTimerRef.current = setTimeout(async () => {
         if (analyzeRunningRef.current) {
@@ -820,13 +860,23 @@ export default function AutoTradePage() {
         if (status === "active") {
           analyzeRunningRef.current = true;
           try {
-            await runAnalysis();
+            const phase = await checkPhase();
+            if (phase === "ENVIRONMENT") {
+              addLocalLog("SYSTEM", "INFO", "🔭 環境認識フェーズ (H1確定) → Gemini分析実行");
+              await runAnalysis({ phase_a: true });
+            } else if (phase === "BATTLE") {
+              addLocalLog("SYSTEM", "INFO", "⚔️ 戦闘モード → Gemini分析実行");
+              await runAnalysis();
+            } else if (phase === "STANDBY") {
+              addLocalLog("SYSTEM", "INFO", `💤 待機モード → Geminiスキップ (最寄りSR: ${srDistancePips?.toFixed(1) ?? "?"}pips)`);
+            } else if (phase === "COOLDOWN") {
+              addLocalLog("SYSTEM", "INFO", "⏸️ クールダウン中 → Geminiスキップ");
+            }
           } finally {
             analyzeRunningRef.current = false;
           }
           scheduleNext();
         } else if (status === "before_start") {
-          // 取引開始前 → 停止せず次のキャンドルまで待機
           addLocalLog("SYSTEM", "INFO", `取引開始時間（${config.trade_start_hour}:00 JST）前のため待機中...`);
           scheduleNext();
         } else {
@@ -1256,6 +1306,36 @@ export default function AutoTradePage() {
             </div>
           </div>
 
+          {/* Phase indicator */}
+          {config.is_active && currentPhase && (
+            <div className={`${card} p-2 flex items-center justify-between text-xs`}>
+              <span className={isDarkMode ? "text-gray-400" : "text-gray-500"}>フェーズ</span>
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  currentPhase === "BATTLE" ? "bg-red-500/20 text-red-400" :
+                  currentPhase === "ENVIRONMENT" ? "bg-amber-500/20 text-amber-400" :
+                  currentPhase === "COOLDOWN" ? "bg-blue-500/20 text-blue-400" :
+                  "bg-emerald-500/20 text-emerald-400"
+                }`}>
+                  {currentPhase === "BATTLE" ? "⚔️ 戦闘" :
+                   currentPhase === "ENVIRONMENT" ? "🔭 環境認識" :
+                   currentPhase === "COOLDOWN" ? "⏸️ クールダウン" :
+                   "💤 待機"}
+                </span>
+                {srDistancePips !== null && (
+                  <span className={`font-mono ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>
+                    SR: {srDistancePips.toFixed(1)}pips
+                  </span>
+                )}
+                {phaseReason && (
+                  <span className={`text-[10px] ${isDarkMode ? "text-gray-600" : "text-gray-400"} hidden sm:inline`}>
+                    {phaseReason}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2">
             <button
@@ -1654,6 +1734,65 @@ export default function AutoTradePage() {
       {/* ====== STRATEGIES TAB ====== */}
       {activeTab === "strategies" && (
         <div className="space-y-4">
+          {/* Phase Configuration (API Cost Optimization) */}
+          <div className={`${card} p-4 space-y-3 border-2 ${isDarkMode ? "border-cyan-500/20" : "border-cyan-200"}`}>
+            <div className="flex items-center gap-2">
+              <Shield size={14} className="text-cyan-400" />
+              <h3 className={`text-sm font-bold ${isDarkMode ? "text-cyan-300" : "text-cyan-700"}`}>
+                API最適化フェーズ設定
+              </h3>
+            </div>
+            <p className={`text-[10px] ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>
+              Gemini APIの呼び出しを最適化し、コストを削減します。価格がSRラインに接近した時のみAI分析を実行します。
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={`text-[10px] block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
+                  Phase A (環境認識)
+                </label>
+                <p className={`text-xs font-mono px-2 py-1.5 rounded ${isDarkMode ? "bg-dark-secondary text-gray-400" : "bg-gray-100 text-gray-600"}`}>
+                  H1バー確定時（毎時00分）に自動実行
+                </p>
+              </div>
+              <div>
+                <label className={`text-[10px] block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
+                  B→C 切り替え距離 (pips)
+                </label>
+                <input
+                  type="number" min={1} max={50} step={1}
+                  value={config.phase_battle_pips || ""}
+                  onChange={(e) => setConfig({ ...config, phase_battle_pips: Number(e.target.value) || 12 })}
+                  className={`${inputCls} font-mono text-xs w-full`}
+                />
+                <p className={`text-[10px] mt-0.5 ${isDarkMode ? "text-gray-600" : "text-gray-400"}`}>
+                  ≤{config.phase_battle_pips}pips→戦闘 / &gt;{config.phase_battle_pips}pips→待機
+                </p>
+              </div>
+              <div>
+                <label className={`text-[10px] block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
+                  Phase C (戦闘) 分析間隔 (分)
+                </label>
+                <input
+                  type="number" min={1} max={60} step={1}
+                  value={config.phase_battle_interval_min || ""}
+                  onChange={(e) => setConfig({ ...config, phase_battle_interval_min: Number(e.target.value) || 5 })}
+                  className={`${inputCls} font-mono text-xs w-full`}
+                />
+              </div>
+              <div>
+                <label className={`text-[10px] block mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
+                  取引後クールダウン (分)
+                </label>
+                <input
+                  type="number" min={0} max={30} step={1}
+                  value={config.post_trade_cooldown_min || ""}
+                  onChange={(e) => setConfig({ ...config, post_trade_cooldown_min: Number(e.target.value) || 5 })}
+                  className={`${inputCls} font-mono text-xs w-full`}
+                />
+              </div>
+            </div>
+          </div>
+
           {/* System Common Prompt (Read-only) */}
           <div className={`${card} p-4 space-y-3 border-2 ${isDarkMode ? "border-amber-500/20" : "border-amber-200"}`}>
             <div className="flex items-center gap-2">

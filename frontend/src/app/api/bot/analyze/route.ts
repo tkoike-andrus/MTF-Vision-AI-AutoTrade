@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { user_id, chart_image, economic_info, dry_run = false } = body;
+    const { user_id, chart_image, economic_info, dry_run = false, phase_a = false } = body;
 
     if (!user_id) {
       return NextResponse.json({ error: "user_id required" }, { status: 400 });
@@ -300,6 +300,85 @@ export async function POST(request: NextRequest) {
       });
     }
     await log("RISK", "SUCCESS", `リスクチェックOK (連敗: ${state?.consecutive_losses || 0} / 日次損益: ¥${(state?.daily_pnl || 0).toLocaleString()})`);
+
+    // ── Step 4.5: Phase check (API cost optimization) ──
+    if (!dry_run && !phase_a && !chart_image) {
+      const cooldownMin = Number(config.post_trade_cooldown_min) || 5;
+
+      // Post-trade cooldown check
+      if (state?.last_trade_at) {
+        const elapsed = (Date.now() - new Date(state.last_trade_at).getTime()) / 1000;
+        const cooldownSec = cooldownMin * 60;
+        if (elapsed < cooldownSec) {
+          const remaining = Math.ceil((cooldownSec - elapsed) / 60);
+          await log("SYSTEM", "INFO", `取引後クールダウン中 (残り${remaining}分) → Geminiスキップ`);
+          return NextResponse.json({
+            skipped: true,
+            phase: "COOLDOWN",
+            reason: `Post-trade cooldown (${remaining}min remaining)`,
+            activity_logs: activityLogs,
+          });
+        }
+      }
+
+      // SR distance check
+      const battlePips = Number(config.phase_battle_pips) || 12;
+      const symbol = String(config.symbol);
+      const pipSize = symbol.includes("JPY") ? 0.01 : 0.0001;
+
+      let srZones: Array<{ type: string; high: number; low: number }> = [];
+      const isVercel = !!process.env.VERCEL;
+
+      // Load sr_levels.json
+      if (!isVercel && config.chart_image_folder) {
+        try {
+          const { readFile } = await import("fs/promises");
+          const { join } = await import("path");
+          const srPath = join(config.chart_image_folder, "sr_levels.json");
+          const content = await readFile(srPath, "utf-8");
+          srZones = JSON.parse(content).zones || [];
+        } catch { /* fallback to storage */ }
+      }
+      if (srZones.length === 0) {
+        try {
+          const { data, error } = await supabase.storage
+            .from("chart-images")
+            .download("charts/sr_levels.json");
+          if (!error && data) {
+            srZones = JSON.parse(await data.text()).zones || [];
+          }
+        } catch { /* no SR data */ }
+      }
+
+      if (srZones.length > 0) {
+        const quickPrice = await getTickerPrice(symbol);
+        if (quickPrice) {
+          let minPips = Infinity;
+          let nearestType = "";
+          for (const z of srZones) {
+            const dH = Math.abs(quickPrice - z.high) / pipSize;
+            const dL = Math.abs(quickPrice - z.low) / pipSize;
+            const inside = quickPrice >= Math.min(z.high, z.low) && quickPrice <= Math.max(z.high, z.low);
+            const d = inside ? 0 : Math.min(dH, dL);
+            if (d < minPips) { minPips = d; nearestType = z.type; }
+          }
+
+          if (minPips > battlePips) {
+            await log("SYSTEM", "INFO", `待機モード: 最寄りSR(${nearestType})まで${minPips.toFixed(1)}pips (>${battlePips}) → Geminiスキップ`);
+            return NextResponse.json({
+              skipped: true,
+              phase: "STANDBY",
+              reason: `Standby - nearest SR ${minPips.toFixed(1)} pips away`,
+              min_distance_pips: Math.round(minPips * 10) / 10,
+              nearest_sr: nearestType,
+              current_price: quickPrice,
+              activity_logs: activityLogs,
+            });
+          }
+          await log("SYSTEM", "SUCCESS", `戦闘モード: ${nearestType}まで${minPips.toFixed(1)}pips (≤${battlePips}) → Gemini分析実行`);
+        }
+      }
+    }
 
     // ── Step 5: Build strategy prompt ──
     const positionStatus = state?.position
@@ -990,7 +1069,7 @@ async function executeTradeAction(
       }
     }
 
-    // ── Step 4: Update bot state ──
+    // ── Step 4: Update bot state (+ last_trade_at for cooldown) ──
     await supabase
       .from("bot_states")
       .update({
@@ -999,6 +1078,7 @@ async function executeTradeAction(
         entry_at: new Date().toISOString(),
         position_id: positionId ? String(positionId) : null,
         stop_loss_order_id: stopLossOrderId,
+        last_trade_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", userId);
@@ -1129,6 +1209,7 @@ async function executeTradeAction(
         stop_loss_order_id: null,
         consecutive_losses: tradePnl < 0 ? consecutiveLosses + 1 : 0,
         daily_pnl: dailyPnl + tradePnl,
+        last_trade_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", userId);
