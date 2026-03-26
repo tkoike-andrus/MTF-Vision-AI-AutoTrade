@@ -118,6 +118,21 @@ export async function POST(request: NextRequest) {
       await log("SYSTEM", "INFO", "Bot状態を初期化しました");
     }
 
+    // ── Daily P&L reset (JST midnight) ──
+    if (state) {
+      const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+      const todayJST = jstNow.toISOString().slice(0, 10); // "YYYY-MM-DD"
+      const lastUpdated = state.updated_at ? new Date(new Date(state.updated_at).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10) : "";
+      if (lastUpdated && lastUpdated !== todayJST && Number(state.daily_pnl || 0) !== 0) {
+        await supabase
+          .from("bot_states")
+          .update({ daily_pnl: 0, consecutive_losses: 0, updated_at: new Date().toISOString() })
+          .eq("user_id", user_id);
+        state = { ...state, daily_pnl: 0, consecutive_losses: 0 };
+        await log("SYSTEM", "INFO", "日付変更: 日次損益・連敗カウントをリセットしました");
+      }
+    }
+
     // ── Step 2: Verify GMO position existence ──
     if (state?.position && !dry_run) {
       const apiKey = String(config.gmo_api_key_enc || "");

@@ -46,6 +46,23 @@ export async function GET(request: NextRequest) {
     console.error("[bot/config GET] state error:", stateRes.error.message, stateRes.error.code);
   }
 
+  // ── Daily P&L reset (JST midnight) ──
+  let stateData = stateRes.data;
+  if (stateData) {
+    const jstNow2 = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const todayJST = jstNow2.toISOString().slice(0, 10);
+    const lastUpdated = stateData.updated_at
+      ? new Date(new Date(stateData.updated_at).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      : "";
+    if (lastUpdated && lastUpdated !== todayJST && Number(stateData.daily_pnl || 0) !== 0) {
+      await supabase
+        .from("bot_states")
+        .update({ daily_pnl: 0, consecutive_losses: 0, updated_at: new Date().toISOString() })
+        .eq("user_id", userId);
+      stateData = { ...stateData, daily_pnl: 0, consecutive_losses: 0 };
+    }
+  }
+
   // 当月損益を集計
   const monthlyPnl = (monthlyOrdersRes.data || []).reduce(
     (sum: number, o: { pnl: number | null }) => sum + (o.pnl || 0), 0
@@ -54,7 +71,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(
     {
       config: configRes.data,
-      state: stateRes.data,
+      state: stateData,
       recentOrders: ordersRes.data || [],
       monthlyPnl: Math.round(monthlyPnl),
     },
